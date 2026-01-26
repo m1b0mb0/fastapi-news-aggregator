@@ -60,10 +60,23 @@ async def scrape_news():
 
 async def scrape_and_save():
     with SessionLocal() as db:
-        data = await services.get_news_from_api()
+        print("Починаємо завантаження...")
+
+        try:
+            api_data = await services.get_news_from_api()
+        except Exception as e:
+            print(f"Помилка NewsAPI: {e}")
+            api_data = []
+        
+        rss_url = "https://www.theverge.com/rss/index.xml"
+        rss_data = services.get_news_from_rss(rss_url)
+
+        all_data = api_data + rss_data
+
+        print(f"Отримано {len(all_data)} новин. Перевіряємо дублікати...")
 
         count = 0
-        for article in data:
+        for article in all_data:
             existing_news = db.query(models.News).filter(models.News.url == article["url"]).first()
             if existing_news:
                 continue
