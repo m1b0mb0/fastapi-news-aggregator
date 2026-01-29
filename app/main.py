@@ -12,7 +12,7 @@ async def lifespan(app: FastAPI):
 
     scheduler.add_job(scrape_and_save, trigger="interval", minutes=15)
     scheduler.start()
-    print("----- Планувальник запущено -----")
+    print("----- The scheduler is running -----")
 
     yield
     scheduler.shutdown()
@@ -32,6 +32,22 @@ def get_db():
 def root():
     return {"message": "News Aggregator is running"}
 
+@app.post("/news", response_model=schemas.NewsResponse)
+def create_news(news: schemas.NewsCreate, db: Session = Depends(get_db)):
+    
+    db_news = models.News(
+        title=news.title,
+        content=news.content,
+        source=news.source,
+        url=news.url
+    )
+    
+    db.add(db_news)
+    db.commit()
+    db.refresh(db_news)
+
+    return db_news 
+
 @app.get("/news", response_model=list[schemas.NewsResponse])
 def read_news(title:str = None, source:str = None, db:Session = Depends(get_db)):
     query = db.query(models.News)
@@ -49,31 +65,54 @@ def read_news_by_id(news_id: int, db: Session = Depends(get_db)):
     news = db.query(models.News).filter(models.News.id == news_id).first()
 
     if news is None:
-        raise HTTPException(status_code=404, detail="Новину не знайдено")
+        raise HTTPException(status_code=404, detail="News not found")
     
     return news
+
+@app.delete("/news/{news_id}")
+def delete_news(news_id: int, db: Session = Depends(get_db)):
+    db_news = db.query(models.News).filter(models.News.id == news_id).first()
+
+    if not db_news:
+        raise HTTPException(status_code=404, detail="News not found")
+
+    db.delete(db_news)
+    db.commit()
+
+    return {"message": "News deleted"}
 
 @app.post("/scrape-news")
 async def scrape_news():
     await scrape_and_save()
-    return {"message": "Запуск оновлення"}
+    return {"message": "Running the update"}
 
 async def scrape_and_save():
     with SessionLocal() as db:
-        print("Починаємо завантаження...")
 
         try:
             api_data = await services.get_news_from_api()
         except Exception as e:
-            print(f"Помилка NewsAPI: {e}")
+            print(f"NewsAPI error: {e}")
             api_data = []
         
-        rss_url = "https://www.theverge.com/rss/index.xml"
-        rss_data = services.get_news_from_rss(rss_url)
+        rss_links = [
+            "https://www.theverge.com/rss/index.xml",
+            "http://feeds.bbci.co.uk/news/technology/rss.xml",
+            "https://itc.ua/ua/feed/"
+        ]
 
-        all_data = api_data + rss_data
+        all_data = []
 
-        print(f"Отримано {len(all_data)} новин. Перевіряємо дублікати...")
+        for url in rss_links:
+            all_data += services.get_news_from_rss(url)
+
+        all_data += api_data
+
+        print(f"{len(all_data)} news items retrieved. Checking for duplicates...")
+
+        if not all_data:
+            print("No news found.")
+            return
 
         count = 0
         for article in all_data:
@@ -93,7 +132,8 @@ async def scrape_and_save():
             )
 
             db.add(new_news)
+            db.flush()
             count += 1
         
         db.commit()
-        print("Новини оновлено!")
+        print("News updated!")
