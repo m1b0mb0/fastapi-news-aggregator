@@ -8,7 +8,7 @@ load_dotenv()
 API_KEY = os.getenv("NEWS_API_KEY")
 
 async def get_news_from_api():
-    url = f"https://newsapi.org/v2/everything?country=us&category=technology&apiKey={API_KEY}"
+    url = f"https://newsapi.org/v2/top-headlines?country=us&category=technology&apiKey={API_KEY}"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
@@ -25,6 +25,7 @@ def get_news_from_rss(rss_url: str):
         title = getattr(entry, "title", "No Title")
         url = getattr(entry, "link", "")
         description = getattr(entry, "description", getattr(entry, "summary", ""))
+        published = getattr(entry, "published", "Unknown Date")
 
         feed_title = getattr(feed.feed, "title", "RSS Source")  
 
@@ -32,7 +33,8 @@ def get_news_from_rss(rss_url: str):
             "title": title,
             "description": description,
             "url": url,
-            "source": {"name": feed_title}
+            "source": {"name": feed_title},
+            "publishedAt": published
         }
 
         articles.append(article_data)

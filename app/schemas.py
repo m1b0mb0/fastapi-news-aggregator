@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class NewsBase(BaseModel):
@@ -6,6 +7,7 @@ class NewsBase(BaseModel):
     content: str
     source: str 
     url: str
+    published_at: datetime
 
 class NewsResponse(NewsBase):
     id: int

@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import engine, Base, SessionLocal
+from database import engine, SessionLocal
 import models, schemas, services
+from datetime import timezone
+from dateutil import parser
 
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -18,7 +20,6 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 app = FastAPI(lifespan=lifespan)
-
 models.Base.metadata.create_all(engine)
 
 def get_db():
@@ -27,6 +28,13 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def parse_date(date: str):
+    dt = parser.parse(date)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    
+    return dt.astimezone(timezone.utc)
 
 @app.get("/")
 def root():
@@ -39,7 +47,8 @@ def create_news(news: schemas.NewsCreate, db: Session = Depends(get_db)):
         title=news.title,
         content=news.content,
         source=news.source,
-        url=news.url
+        url=news.url,
+        published_at = news.published_at
     )
     
     db.add(db_news)
@@ -128,7 +137,8 @@ async def scrape_and_save():
                 title = article["title"],
                 content = article["description"] or "",
                 source = source_name,
-                url = article["url"]
+                url = article["url"],
+                published_at = parse_date(article["publishedAt"])
             )
 
             db.add(new_news)

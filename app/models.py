@@ -9,3 +9,4 @@ class News(Base):
     content = Column(Text)
     source = Column(String)
     url = Column(Text, unique=True)
+    published_at = Column(DateTime(timezone=True), nullable=False)
