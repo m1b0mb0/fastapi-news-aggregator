@@ -113,7 +113,7 @@ def delete_news(news_id: int, db: Session = Depends(get_db)):
     return {"message": "News deleted"}
 
 @app.post("/scrape-news")
-async def scrape_news():
+async def scrape_news(current_user: models.User = Depends(get_current_user)):
     await scrape_and_save()
     return {"message": "Running the update"}
 
