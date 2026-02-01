@@ -1,12 +1,17 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+import models, schemas, services, utils
 from database import engine, SessionLocal
-import models, schemas, services
+from utils import SECRET_KEY, ALGORITHM
 from datetime import timezone
 from dateutil import parser
+from jose import JWTError, jwt
 
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,7 +73,6 @@ def read_news(title:str = None, source:str = None, db:Session = Depends(get_db))
     
     return query.all()
     
-
 @app.get("/news/{news_id}", response_model=schemas.NewsResponse)
 def read_news_by_id(news_id: int, db: Session = Depends(get_db)):
     news = db.query(models.News).filter(models.News.id == news_id).first()
@@ -147,3 +151,34 @@ async def scrape_and_save():
         
         db.commit()
         print("News updated!")
+
+@app.post("/register", response_model=schemas.UserResponse)
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(models.User).filter(models.User.email == user.email).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hash_pwd = utils.get_pwd_hash(user.password)
+    new_user = models.User(
+        email = user.email,
+        hashed_password = hash_pwd
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
+
+@app.post("/token", response_model=schemas.Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect username or password", headers={"WWW-Authenticate": "Bearer"})
+    
+    if not utils.verify_pwd(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect username or password", headers={"WWW-Authenticate": "Bearer"})
+    
+    access_token = utils.create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
