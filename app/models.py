@@ -10,3 +10,10 @@ class News(Base):
     source = Column(String)
     url = Column(Text, unique=True)
     published_at = Column(DateTime(timezone=True), nullable=False)
+
+class User(Base):
+    __tablename__ = "user"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True)
+    hashed_password = Column(String, nullable=False)
