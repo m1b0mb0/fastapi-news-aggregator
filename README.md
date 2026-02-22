@@ -1,6 +1,5 @@
 # News Aggregator API
 
-## Short Description
 An asynchronous REST API built with FastAPI that automatically aggregates news from RSS feeds and external APIs, normalizes the data, and provides secure access through JWT authentication. 
 
 ## Technologies
